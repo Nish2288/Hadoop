@@ -1,0 +1,26 @@
+load_tweets = LOAD '/user/cloudera/input/demonetization-tweets.csv' using PigStorage(',');
+
+
+extract_details = FOREACH load_tweets GENERATE $0 as id,$1 as text;
+
+
+tokens = FOREACH extract_details generate id,text,FLATTEN(TOKENIZE(text)) as word;
+
+
+--The AFINN is a dictionary which consists of 2500 words which are rated from +5 to -5 depending on their meaning
+
+dictionary = load '/user/cloudera/input/AFINN.txt'using PigStorage('\t')as(word:chararray,rating:int);
+
+word_rating = join tokens by word left outer,dictionary by word;
+
+rating = foreach word_rating generate tokens::id as id,tokens::text as text, dictionary::rating as rate;
+
+word_group = group rating by (id,text);
+
+avg_rate = foreach word_group generate group, AVG(rating.rate) as tweet_rating;
+
+positive_tweets = filter avg_rate by tweet_rating>=0;
+
+store positive_tweets into '/user/cloudera/output/positive_tweets';
+
+store negative_tweets into '/user/cloudera/output/negative_tweets';
